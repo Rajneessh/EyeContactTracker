@@ -1,0 +1,21 @@
+# data
+*.npz
+*.mat
+data/
+*.zip
+
+# model checkpoints
+*.pt
+*.pth
+*.h5
+!models/best_gaze_model.pt
+
+# python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+venv/
+.env
+
+# os
+.DS_Store
