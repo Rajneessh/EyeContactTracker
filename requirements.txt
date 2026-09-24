@@ -6,3 +6,4 @@ matplotlib
 pandas
 mediapipe
 pywin32
+pyinstaller

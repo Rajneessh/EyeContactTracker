@@ -5,8 +5,18 @@ import torch
 import torch.nn as nn
 import json
 import time
+import sys
+import os
+import re
 from datetime import datetime
 from collections import deque
+
+try:
+    import tkinter as tk
+    from tkinter import simpledialog
+    HAS_TKINTER = True
+except ImportError:
+    HAS_TKINTER = False
 
 try:
     import winsound
@@ -21,6 +31,12 @@ try:
 except ImportError:
     HAS_WIN32 = False
     print("NOTE: pywin32 not installed — overlay will NOT be forced always-on-top.")
+
+
+def get_resource_path(relative_path):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
 
 
 class GazeCNN(nn.Module):
@@ -48,14 +64,6 @@ class GazeCNN(nn.Module):
         return self.fc(x)
 
 
-import sys
-import os
-
-def get_resource_path(relative_path):
-    if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, relative_path)
-    return os.path.join(os.path.abspath("."), relative_path)
-
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = GazeCNN().to(device)
 model_path = get_resource_path('models/best_gaze_model.pt')
@@ -63,20 +71,19 @@ model.load_state_dict(torch.load(model_path, map_location=device))
 model.eval()
 print(f"Model loaded from {model_path} on {device}")
 
-# Tighter thresholds for v4 — ultra-high sensitivity mode
-TOLERANCE_DEG = 5.0               # Gaze deviation limit reduced to 5.0°
-HEAD_YAW_GATE_RATIO = 0.07         # Head yaw threshold lowered to 0.07 for ultra-sensitive minor horizontal turn detection
-HEAD_PITCH_GATE_RATIO = 0.07       # Head pitch threshold lowered to 0.07 for ultra-sensitive minor vertical turn detection
+# V4/V5 High Sensitivity Settings
+TOLERANCE_DEG = 5.0
+HEAD_YAW_GATE_RATIO = 0.07
+HEAD_PITCH_GATE_RATIO = 0.07
 
 SMOOTHING_WINDOW = 5
 BREAK_CONFIRM_FRAMES = 4
-LOG_PATH = "app/session_log.json"
 
 CALIB_ROUNDS = 3
 CALIB_ROUND_DURATION = 2.0
 
 OVERLAY_X, OVERLAY_Y = 40, 40
-WINDOW_NAME = "Eye Contact Monitor"
+WINDOW_NAME = "Eye Contact Monitor v5"
 
 mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(
@@ -87,17 +94,54 @@ face_mesh = mp_face_mesh.FaceMesh(
 LEFT_EYE_IDX = [33, 133, 160, 159, 158, 157, 173, 155, 154, 153, 145, 144, 163, 7]
 RIGHT_EYE_IDX = [362, 263, 387, 386, 385, 384, 398, 382, 381, 380, 374, 373, 390, 249]
 
-# Face landmarks for geometric head pose estimation (Yaw & Pitch)
 NOSE_TIP_IDX = 1
 LEFT_EYE_OUTER_IDX = 33
 RIGHT_EYE_OUTER_IDX = 263
 
 
+def prompt_candidate_name():
+    """Opens a GUI form dialog for HR to fill in candidate name."""
+    default_name = f"Candidate_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    if HAS_TKINTER:
+        try:
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes("-topmost", True)
+            user_input = simpledialog.askstring(
+                "HR Candidate Registration",
+                "Enter Candidate Name (To be filled by HR):",
+                initialvalue="John Doe",
+                parent=root
+            )
+            root.destroy()
+            if user_input and user_input.strip():
+                return user_input.strip()
+        except Exception as e:
+            print(f"TKinter dialog error: {e}")
+
+    # Fallback to CLI input if Tkinter is unavailable
+    print("\n--- HR Candidate Form ---")
+    cli_input = input("Enter Candidate Name (To be filled by HR): ").strip()
+    return cli_input if cli_input else default_name
+
+
+def sanitize_folder_name(name):
+    """Sanitizes candidate name for Windows folder paths."""
+    sanitized = re.sub(r'[\\/*?:"<>|]', '_', name)
+    return sanitized.strip().replace(" ", "_")
+
+
+def setup_candidate_session(candidate_name):
+    """Creates a unique directory for the candidate inside sessions/."""
+    safe_name = sanitize_folder_name(candidate_name)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    folder_name = f"{safe_name}_{timestamp}"
+    session_dir = os.path.join("sessions", folder_name)
+    os.makedirs(session_dir, exist_ok=True)
+    return session_dir, safe_name
+
+
 def estimate_head_pose_ratios(landmarks, w, h):
-    """Returns (yaw_ratio, pitch_ratio):
-    - yaw_ratio: horizontal shift of nose tip relative to eye span
-    - pitch_ratio: vertical shift of nose tip relative to eye Y position
-    """
     nose_x = landmarks[NOSE_TIP_IDX].x * w
     nose_y = landmarks[NOSE_TIP_IDX].y * h
     left_x = landmarks[LEFT_EYE_OUTER_IDX].x * w
@@ -158,7 +202,7 @@ def get_both_eye_preds(frame, landmarks, w, h):
     return left_pred, right_pred
 
 
-def draw_overlay(frame, status_text, deviation_deg, yaw_dev, pitch_dev, is_away, no_face):
+def draw_overlay(frame, status_text, candidate_name, deviation_deg, yaw_dev, pitch_dev, is_away, no_face):
     h, w = frame.shape[:2]
     display = frame.copy()
 
@@ -169,17 +213,15 @@ def draw_overlay(frame, status_text, deviation_deg, yaw_dev, pitch_dev, is_away,
     else:
         color = (0, 200, 0)
 
-    # Border around frame
     border_thickness = 10
     cv2.rectangle(display, (0, 0), (w - 1, h - 1), color, border_thickness)
 
-    # Top banner for main status
     banner_h = 60
     cv2.rectangle(display, (0, 0), (w, banner_h), color, -1)
     cv2.putText(display, status_text, (20, 42), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
 
     if not no_face:
-        info_str = f"Gaze: {deviation_deg:.1f}° | Yaw: {yaw_dev:.2f} | Pitch: {pitch_dev:.2f}"
+        info_str = f"Candidate: {candidate_name} | Gaze: {deviation_deg:.1f}°"
         cv2.putText(display, info_str, (w - 380, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
 
     return display
@@ -193,8 +235,9 @@ def make_overlay_topmost(window_name, x, y, w, h):
         win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, x, y, w, h, win32con.SWP_SHOWWINDOW)
 
 
-def load_session_log(left_baseline, right_baseline, yaw_baseline, pitch_baseline):
+def load_session_log(candidate_name, left_baseline, right_baseline, yaw_baseline, pitch_baseline):
     return {
+        "candidate_name": candidate_name,
         "session_start": datetime.now().isoformat(),
         "events": [],
         "calibration": {
@@ -208,27 +251,40 @@ def load_session_log(left_baseline, right_baseline, yaw_baseline, pitch_baseline
     }
 
 
-def save_session_log(log):
-    with open(LOG_PATH, "w") as f:
+def save_session_log(log_path, log):
+    with open(log_path, "w") as f:
         json.dump(log, f, indent=2)
 
 
-# ============ OPEN CAMERA FIRST ============
+# ============ 1. HR FORM: CANDIDATE REGISTRATION ============
+
+candidate_raw_name = prompt_candidate_name()
+session_dir, safe_candidate_name = setup_candidate_session(candidate_raw_name)
+log_file_path = os.path.join(session_dir, "session_log.json")
+photo_file_path = os.path.join(session_dir, "candidate_photo.jpg")
+
+print(f"\n--- Candidate Registered ---")
+print(f"Name: {candidate_raw_name}")
+print(f"Session Directory: {session_dir}\n")
+
+# ============ 2. OPEN CAMERA ============
 
 cap = cv2.VideoCapture(0)
 if not cap.isOpened():
     print("ERROR: could not open camera.")
     exit()
 
-print("Camera opened. Showing live preview — press SPACE when ready to calibrate, 'q' to quit.")
+print("Camera opened. Press SPACE when candidate is seated & ready to calibrate, 'q' to quit.")
 
 while True:
     ret, frame = cap.read()
     if not ret:
         continue
     display = frame.copy()
-    cv2.putText(display, "Press SPACE to begin calibration", (30, 50),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+    cv2.putText(display, f"Candidate: {candidate_raw_name}", (30, 40),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+    cv2.putText(display, "Press SPACE to begin calibration", (30, 80),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
     cv2.imshow(WINDOW_NAME, display)
     key = cv2.waitKey(1) & 0xFF
     if key == ord(' '):
@@ -238,14 +294,15 @@ while True:
         cv2.destroyAllWindows()
         exit()
 
-# ============ CALIBRATION PHASE ============
+# ============ 3. CALIBRATION PHASE (WITH PHOTO CAPTURE IN ROUND 2) ============
 
 left_samples_all = []
 right_samples_all = []
 yaw_samples_all = []
 pitch_samples_all = []
+photo_captured = False
 
-print(f"\n=== Calibration v4: High-Sensitivity Mode ({CALIB_ROUNDS} rounds) ===\n")
+print(f"\n=== Calibration v5 ({CALIB_ROUNDS} rounds) ===\n")
 
 for round_num in range(1, CALIB_ROUNDS + 1):
     print(f"Round {round_num}/{CALIB_ROUNDS} — get ready...")
@@ -281,6 +338,13 @@ for round_num in range(1, CALIB_ROUNDS + 1):
         if not ret:
             continue
         h, w = frame.shape[:2]
+
+        # Capture photograph of candidate during 2nd calibration round
+        if round_num == 2 and not photo_captured:
+            cv2.imwrite(photo_file_path, frame)
+            photo_captured = True
+            print(f"Captured candidate photograph: {photo_file_path}")
+
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = face_mesh.process(rgb)
 
@@ -327,18 +391,15 @@ right_baseline = np.median(right_arr, axis=0)
 yaw_baseline = float(np.median(yaw_samples_all)) if yaw_samples_all else 0.0
 pitch_baseline = float(np.median(pitch_samples_all)) if pitch_samples_all else 0.0
 
-print(f"\nCalibration complete.")
-print(f"  Left eye baseline (theta, phi):  {np.degrees(left_baseline)}")
-print(f"  Right eye baseline (theta, phi): {np.degrees(right_baseline)}")
+print(f"\nCalibration complete for {candidate_raw_name}.")
 print(f"  Head yaw baseline ratio:   {yaw_baseline:.3f}")
-print(f"  Head pitch baseline ratio: {pitch_baseline:.3f}")
-print(f"  Total samples: {len(left_samples_all)} left, {len(right_samples_all)} right\n")
+print(f"  Head pitch baseline ratio: {pitch_baseline:.3f}\n")
 
 beep(2000, 400)
 
-# ============ LIVE DETECTION PHASE (High Sensitivity) ============
+# ============ 4. LIVE MONITORING PHASE ============
 
-session_log = load_session_log(left_baseline, right_baseline, yaw_baseline, pitch_baseline)
+session_log = load_session_log(candidate_raw_name, left_baseline, right_baseline, yaw_baseline, pitch_baseline)
 
 history = deque(maxlen=SMOOTHING_WINDOW)
 break_streak = 0
@@ -346,7 +407,7 @@ currently_away = False
 away_start_time = None
 away_start_deg = None
 
-print("Starting live monitoring v4. Press 'q' to quit.\n")
+print(f"Starting live monitoring for {candidate_raw_name}. Press 'q' to quit.\n")
 
 try:
     while True:
@@ -389,10 +450,11 @@ try:
                         "start_time": datetime.fromtimestamp(away_start_time).isoformat(),
                         "end_time": datetime.now().isoformat(),
                         "duration_sec": round(time.time() - away_start_time, 2),
-                        "peak_deviation_deg": round(away_start_deg, 2)
+                        "peak_deviation_deg": round(away_start_deg, 2),
+                        "type": "head_turned"
                     }
                     session_log["events"].append(event)
-                    save_session_log(session_log)
+                    save_session_log(log_file_path, session_log)
                     print(f"Logged: face turned away for {event['duration_sec']}s")
 
                 is_away = now_away
@@ -432,10 +494,11 @@ try:
                             "start_time": datetime.fromtimestamp(away_start_time).isoformat(),
                             "end_time": datetime.now().isoformat(),
                             "duration_sec": round(time.time() - away_start_time, 2),
-                            "peak_deviation_deg": round(away_start_deg, 2)
+                            "peak_deviation_deg": round(away_start_deg, 2),
+                            "type": "gaze_drift"
                         }
                         session_log["events"].append(event)
-                        save_session_log(session_log)
+                        save_session_log(log_file_path, session_log)
                         print(f"Logged: looked away for {event['duration_sec']}s (peak {event['peak_deviation_deg']}°)")
 
                     is_away = now_away
@@ -444,7 +507,7 @@ try:
                     else:
                         status_label = "EYE CONTACT"
 
-        overlay_frame = draw_overlay(frame, status_label, deviation_deg, yaw_dev, pitch_dev, is_away, no_face)
+        overlay_frame = draw_overlay(frame, status_label, candidate_raw_name, deviation_deg, yaw_dev, pitch_dev, is_away, no_face)
         cv2.imshow(WINDOW_NAME, overlay_frame)
         make_overlay_topmost(WINDOW_NAME, x=OVERLAY_X, y=OVERLAY_Y, w=frame.shape[1], h=frame.shape[0])
 
@@ -466,8 +529,11 @@ if currently_away:
     session_log["events"].append(event)
 
 session_log["session_end"] = datetime.now().isoformat()
-save_session_log(session_log)
-print(f"\nSession log saved to {LOG_PATH} — {len(session_log['events'])} look-away events recorded.")
+save_session_log(log_file_path, session_log)
+
+print(f"\nSession log saved to {log_file_path}")
+print(f"Candidate photo saved to {photo_file_path}")
+print(f"Total look-away events recorded: {len(session_log['events'])}\n")
 
 cap.release()
 cv2.destroyAllWindows()
