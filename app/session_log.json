@@ -1,0 +1,109 @@
+{
+  "session_start": "2026-09-24T13:36:49.313163",
+  "events": [
+    {
+      "start_time": "2026-09-24T13:36:51.451451",
+      "end_time": "2026-09-24T13:36:51.972101",
+      "duration_sec": 0.52,
+      "peak_deviation_deg": 5.46
+    },
+    {
+      "start_time": "2026-09-24T13:36:53.069249",
+      "end_time": "2026-09-24T13:36:53.393646",
+      "duration_sec": 0.32,
+      "peak_deviation_deg": 5.27
+    },
+    {
+      "start_time": "2026-09-24T13:36:53.781698",
+      "end_time": "2026-09-24T13:36:53.991750",
+      "duration_sec": 0.21,
+      "peak_deviation_deg": 5.34
+    },
+    {
+      "start_time": "2026-09-24T13:36:55.113770",
+      "end_time": "2026-09-24T13:36:55.705973",
+      "duration_sec": 0.59,
+      "peak_deviation_deg": 14.63
+    },
+    {
+      "start_time": "2026-09-24T13:36:56.620814",
+      "end_time": "2026-09-24T13:36:57.525974",
+      "duration_sec": 0.91,
+      "peak_deviation_deg": 7.38
+    },
+    {
+      "start_time": "2026-09-24T13:36:57.929472",
+      "end_time": "2026-09-24T13:36:58.455676",
+      "duration_sec": 0.53,
+      "peak_deviation_deg": 5.22
+    },
+    {
+      "start_time": "2026-09-24T13:36:59.139050",
+      "end_time": "2026-09-24T13:36:59.720132",
+      "duration_sec": 0.58,
+      "peak_deviation_deg": 10.42
+    },
+    {
+      "start_time": "2026-09-24T13:37:01.469500",
+      "end_time": "2026-09-24T13:37:01.977078",
+      "duration_sec": 0.51,
+      "peak_deviation_deg": 9.54
+    },
+    {
+      "start_time": "2026-09-24T13:37:02.575647",
+      "end_time": "2026-09-24T13:37:03.047714",
+      "duration_sec": 0.47,
+      "peak_deviation_deg": 9.87
+    },
+    {
+      "start_time": "2026-09-24T13:37:03.426973",
+      "end_time": "2026-09-24T13:37:03.508825",
+      "duration_sec": 0.08,
+      "peak_deviation_deg": 5.62
+    },
+    {
+      "start_time": "2026-09-24T13:37:08.281138",
+      "end_time": "2026-09-24T13:37:08.756015",
+      "duration_sec": 0.47,
+      "peak_deviation_deg": 5.11
+    },
+    {
+      "start_time": "2026-09-24T13:37:08.916380",
+      "end_time": "2026-09-24T13:37:10.185973",
+      "duration_sec": 1.27,
+      "peak_deviation_deg": 7.19
+    },
+    {
+      "start_time": "2026-09-24T13:37:10.500521",
+      "end_time": "2026-09-24T13:37:12.050693",
+      "duration_sec": 1.55,
+      "peak_deviation_deg": 6.46
+    },
+    {
+      "start_time": "2026-09-24T13:37:14.667953",
+      "end_time": "2026-09-24T13:37:14.775455",
+      "duration_sec": 0.11,
+      "peak_deviation_deg": 5.09
+    },
+    {
+      "start_time": "2026-09-24T13:37:15.139675",
+      "end_time": "2026-09-24T13:37:15.179810",
+      "duration_sec": 0.04,
+      "peak_deviation_deg": 5.08
+    },
+    {
+      "start_time": "2026-09-24T13:37:16.068151",
+      "end_time": "2026-09-24T13:37:16.477649",
+      "duration_sec": 0.41,
+      "peak_deviation_deg": 5.67
+    }
+  ],
+  "calibration": {
+    "left_baseline_theta": -0.10366082191467285,
+    "left_baseline_phi": 0.004095155745744705,
+    "right_baseline_theta": -0.07739755511283875,
+    "right_baseline_phi": 0.017612002789974213,
+    "yaw_baseline_ratio": -0.01487330952485598,
+    "pitch_baseline_ratio": 0.4303051389836315
+  }
+}
